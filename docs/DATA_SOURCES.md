@@ -1,36 +1,31 @@
 INVEST AI Data Sources
 Market Data
-Primary:
-
+Primary
 Yahoo Finance
-Secondary:
-
+Secondary
 Stooq
 ETF Data
-Primary:
-
+Primary
 iShares
 Vanguard
 Invesco
 WisdomTree
 Macro
-Primary:
-
+Primary
 ECB
 Federal Reserve
 Eurostat
 Crypto
-Primary:
-
+Primary
 CoinShares
 21Shares
 Alternative.me
 Update Strategy
-Initial Load:
+Initial Load
+2018 → Current Date
 
-2018 -> Current Date
-Daily Update:
+Daily Update
+Last stored date → Current Date
 
-Last stored date -> Current Date
 Rule
 Missing data = No recommendation
