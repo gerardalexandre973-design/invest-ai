@@ -17,9 +17,17 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           echo "Testing connection configuration"
-
           echo "URL length:"
           echo ${#SUPABASE_URL}
-
           echo "Secret key length:"
           echo ${#SUPABASE_SECRET_KEY}
+
+      - name: Call Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          curl -i \
+          "${SUPABASE_URL}/rest/v1/data_update_log?select=*" \
+          -H "apikey: ${SUPABASE_SECRET_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
