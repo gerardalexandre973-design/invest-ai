@@ -1,33 +1,17 @@
-name: INVEST AI Test
-
-on:
-  workflow_dispatch:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Verify secrets
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-        run: |
-          echo "Testing connection configuration"
-          echo "URL length:"
-          echo ${#SUPABASE_URL}
-          echo "Secret key length:"
-          echo ${#SUPABASE_SECRET_KEY}
-
-      - name: Call Supabase REST API
+- name: Insert test log
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           curl -i \
-          "${SUPABASE_URL}/rest/v1/data_update_log?select=*" \
+          -X POST \
+          "${SUPABASE_URL}/rest/v1/data_update_log" \
           -H "apikey: ${SUPABASE_SECRET_KEY}" \
-          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
+          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: return=representation" \
+          -d '{
+            "status":"TEST",
+            "imported_rows":0,
+            "notes":"GitHub Action test"
+          }'
