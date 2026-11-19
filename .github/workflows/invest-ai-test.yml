@@ -11,7 +11,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test execution
+      - name: Verify secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          echo "INVEST AI workflow executed successfully"
-          date
+          echo "Testing connection configuration"
+
+          echo "URL length:"
+          echo ${#SUPABASE_URL}
+
+          echo "Secret key length:"
+          echo ${#SUPABASE_SECRET_KEY}
