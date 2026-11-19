@@ -21,3 +21,16 @@ jobs:
           echo ${#SUPABASE_URL}
           echo "Secret key length:"
           echo ${#SUPABASE_SECRET_KEY}
+
+      - name: Insert test log
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          curl -i -X POST \
+          "${SUPABASE_URL}/rest/v1/data_update_log" \
+          -H "apikey: ${SUPABASE_SECRET_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: return=representation" \
+          -d '{"status":"TEST","imported_rows":0,"notes":"GitHub Action test"}'
