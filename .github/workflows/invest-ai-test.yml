@@ -1,10 +1,10 @@
-name: INVEST AI Full Load
+name: INVEST AI Historical Load
 
 on:
   workflow_dispatch:
 
 jobs:
-  load-prices:
+  historical-load:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +16,7 @@ jobs:
 
       - run: pip install yfinance requests pandas
 
-      - name: Load all assets
+      - name: Load 1 year history
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -25,74 +25,79 @@ jobs:
           import requests
           import yfinance as yf
 
-          url = f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/assets?select=id,ticker"
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
 
           headers = {
-              "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
-              "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}"
+              "apikey": SUPABASE_KEY,
+              "Authorization": f"Bearer {SUPABASE_KEY}"
           }
 
-          assets = requests.get(url, headers=headers).json()
+          assets = requests.get(
+              f"{SUPABASE_URL}/rest/v1/assets?select=id,ticker",
+              headers=headers
+          ).json()
 
-          market_suffix = {
-              "SAN":"SAN.MC",
-              "BBVA":"BBVA.MC",
-              "CABK":"CABK.MC",
-              "BKT":"BKT.MC",
-              "IBE":"IBE.MC",
-              "REP":"REP.MC",
-              "NTGY":"NTGY.MC",
-              "RED":"RED.MC",
-              "ENG":"ENG.MC",
-              "ITX":"ITX.MC",
-              "AMS":"AMS.MC",
-              "AENA":"AENA.MC",
-              "TEF":"TEF.MC"
+          mapping = requests.get(
+              f"{SUPABASE_URL}/rest/v1/asset_price_sources?select=asset_id,yahoo_symbol",
+              headers=headers
+          ).json()
+
+          yahoo_map = {
+              row["asset_id"]: row["yahoo_symbol"]
+              for row in mapping
           }
 
           inserted = 0
 
           for asset in assets:
 
-              ticker = market_suffix.get(asset["ticker"], asset["ticker"])
+              asset_id = asset["id"]
+
+              if asset_id not in yahoo_map:
+                  continue
+
+              yahoo_symbol = yahoo_map[asset_id]
 
               try:
-                  df = yf.Ticker(ticker).history(period="5d")
+
+                  df = yf.Ticker(yahoo_symbol).history(period="1y")
 
                   if len(df) == 0:
                       continue
 
-                  latest = df.iloc[-1]
+                  for idx, row in df.iterrows():
 
-                  payload = {
-                      "asset_id": asset["id"],
-                      "trading_date": str(df.index[-1].date()),
-                      "open_price": float(latest["Open"]),
-                      "high_price": float(latest["High"]),
-                      "low_price": float(latest["Low"]),
-                      "close_price": float(latest["Close"]),
-                      "adjusted_close": float(latest["Close"]),
-                      "volume": int(latest["Volume"])
-                  }
+                      payload = {
+                          "asset_id": asset_id,
+                          "trading_date": str(idx.date()),
+                          "open_price": float(row["Open"]),
+                          "high_price": float(row["High"]),
+                          "low_price": float(row["Low"]),
+                          "close_price": float(row["Close"]),
+                          "adjusted_close": float(row["Close"]),
+                          "volume": int(row["Volume"])
+                      }
 
-                  r = requests.post(
-                      f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/asset_prices",
-                      headers={
-                          "apikey":"${{ secrets.SUPABASE_SECRET_KEY }}",
-                          "Authorization":"Bearer ${{ secrets.SUPABASE_SECRET_KEY }}",
-                          "Content-Type":"application/json",
-                          "Prefer":"resolution=ignore-duplicates"
-                      },
-                      json=payload
-                  )
+                      r = requests.post(
+                          f"{SUPABASE_URL}/rest/v1/asset_prices",
+                          headers={
+                              "apikey": SUPABASE_KEY,
+                              "Authorization": f"Bearer {SUPABASE_KEY}",
+                              "Content-Type": "application/json",
+                              "Prefer": "resolution=ignore-duplicates"
+                          },
+                          json=payload
+                      )
 
-                  if r.status_code in (200, 201):
-                      inserted += 1
+                      if r.status_code in (200, 201):
+                          inserted += 1
 
-                  print(ticker, r.status_code)
+                  print(yahoo_symbol, len(df))
 
               except Exception as e:
-                  print(ticker, e)
+                  print(yahoo_symbol, e)
 
-          print("INSERTED =", inserted)
+          print("TOTAL INSERTED =", inserted)
+
           EOF
