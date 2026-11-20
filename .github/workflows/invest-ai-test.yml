@@ -20,22 +20,59 @@ jobs:
         run: |
           pip install requests
 
-      - name: Read first 5 assets
+- name: Load first 5 prices
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           python << 'EOF'
           import requests
-          import json
+          import yfinance as yf
 
-          response = requests.get(
-              f"${{ secrets.SUPABASE_URL }}/rest/v1/assets?select=ticker,id&order=ticker",
-              headers={
-                  "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
-                  "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}"
+          assets = [
+              ("BBVA.MC","7fe8ce3c-f258-4690-b82a-e1487b3eaee4"),
+              ("BKT.MC","4cbaabe2-ae63-434d-a4e1-3c18ed751385"),
+              ("CABK.MC","95844c0a-7076-421b-86fc-c3b56e9d7ebc"),
+              ("IBE.MC","3c71c23b-2e2c-4f4d-b577-ae79a2e282f0"),
+              ("SAN.MC","eb164cc7-f94a-4b17-9355-013e28b3432e")
+          ]
+
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
+
+          headers = {
+              "apikey": SUPABASE_KEY,
+              "Authorization": f"Bearer {SUPABASE_KEY}",
+              "Content-Type": "application/json",
+              "Prefer": "resolution=ignore-duplicates"
+          }
+
+          for ticker, asset_id in assets:
+
+              df = yf.Ticker(ticker).history(period="5d")
+
+              latest = df.iloc[-1]
+
+              payload = {
+                  "asset_id": asset_id,
+                  "trading_date": str(df.index[-1].date()),
+                  "open_price": float(latest["Open"]),
+                  "high_price": float(latest["High"]),
+                  "low_price": float(latest["Low"]),
+                  "close_price": float(latest["Close"]),
+                  "adjusted_close": float(latest["Close"]),
+                  "volume": int(latest["Volume"])
               }
-          )
+
+              r = requests.post(
+                  f"{SUPABASE_URL}/rest/v1/asset_prices",
+                  headers=headers,
+                  json=payload
+              )
+
+              print(ticker, r.status_code)
+
+          EOF
 
           assets = response.json()[:5]
 
