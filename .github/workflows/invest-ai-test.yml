@@ -18,57 +18,26 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yfinance requests
+          pip install requests
 
-      - name: Read Iberdrola and save latest price
+      - name: Read first 5 assets
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           python << 'EOF'
-          import yfinance as yf
           import requests
-
-          ASSET_ID = None
+          import json
 
           response = requests.get(
-              f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/assets?ticker=eq.IBE&select=id",
+              f"${{ secrets.SUPABASE_URL }}/rest/v1/assets?select=ticker,id&order=ticker",
               headers={
                   "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
                   "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}"
               }
           )
 
-          ASSET_ID = response.json()[0]["id"]
+          assets = response.json()[:5]
 
-          print("ASSET_ID:", ASSET_ID)
-
-          df = yf.Ticker("IBE.MC").history(period="5d")
-
-          latest = df.iloc[-1]
-
-          payload = {
-              "asset_id": ASSET_ID,
-              "trading_date": str(df.index[-1].date()),
-              "open_price": float(latest["Open"]),
-              "high_price": float(latest["High"]),
-              "low_price": float(latest["Low"]),
-              "close_price": float(latest["Close"]),
-              "adjusted_close": float(latest["Close"]),
-              "volume": int(latest["Volume"])
-          }
-
-          response = requests.post(
-              f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/asset_prices",
-              headers={
-                  "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
-                  "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}",
-                  "Content-Type": "application/json",
-                  "Prefer": "return=representation"
-              },
-              json=payload
-          )
-
-          print(response.status_code)
-          print("SUCCESS")
+          print(json.dumps(assets, indent=2))
           EOF
