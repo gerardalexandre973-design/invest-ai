@@ -29,7 +29,18 @@ jobs:
           import yfinance as yf
           import requests
 
-          ASSET_ID = "3c71c23b-2e2c-4f4d-b577-ae79a2e282f0"
+          ASSET_ID = None
+response = requests.get(
+    f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/assets?ticker=eq.IBE&select=id",
+    headers={
+        "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
+        "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}"
+    }
+)
+
+ASSET_ID = response.json()[0]["id"]
+
+print("ASSET_ID:", ASSET_ID)
 
           df = yf.Ticker("IBE.MC").history(period="5d")
 
