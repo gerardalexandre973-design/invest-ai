@@ -22,12 +22,11 @@ jobs:
           echo "Secret key length:"
           echo ${#SUPABASE_SECRET_KEY}
 
-      -       - name: Count assets pending update
+      - name: Count assets pending update
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-
           RESPONSE=$(curl -s \
           "${SUPABASE_URL}/rest/v1/asset_update_queue?status=eq.PENDING&select=id" \
           -H "apikey: ${SUPABASE_SECRET_KEY}" \
@@ -45,3 +44,15 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           PENDING_COUNT: ${{ env.PENDING_COUNT }}
         run: |
+          curl -s \
+          -X POST \
+          "${SUPABASE_URL}/rest/v1/data_update_log" \
+          -H "apikey: ${SUPABASE_SECRET_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: return=representation" \
+          -d "{
+            \"status\":\"QUEUE_TEST\",
+            \"imported_rows\":${PENDING_COUNT},
+            \"notes\":\"Assets pending update\"
+          }"
