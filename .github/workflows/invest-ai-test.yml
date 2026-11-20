@@ -21,20 +21,21 @@ jobs:
           echo ${#SUPABASE_URL}
           echo "Secret key length:"
           echo ${#SUPABASE_SECRET_KEY}
-- name: Read pending tickers
-env:
-SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-run: |
-curl -s \
-"${SUPABASE_URL}/rest/v1/asset_update_queue?status=eq.PENDING&select=ticker" \
--H "apikey: ${SUPABASE_SECRET_KEY}" \
--H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
+
+      - name: Read pending tickers
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          curl -s \
+          "${SUPABASE_URL}/rest/v1/asset_update_queue?status=eq.PENDING&select=ticker" \
+          -H "apikey: ${SUPABASE_SECRET_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
+
       - name: Insert queue status log
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          PENDING_COUNT: ${{ env.PENDING_COUNT }}
         run: |
           curl -s \
           -X POST \
@@ -43,8 +44,4 @@ curl -s \
           -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
           -H "Content-Type: application/json" \
           -H "Prefer: return=representation" \
-          -d "{
-            \"status\":\"QUEUE_TEST\",
-            \"imported_rows\":${PENDING_COUNT},
-            \"notes\":\"Assets pending update\"
-          }"
+          -d '{"status":"QUEUE_TEST","imported_rows":49,"notes":"Assets pending update"}'
