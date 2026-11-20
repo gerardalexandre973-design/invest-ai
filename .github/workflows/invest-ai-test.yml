@@ -21,23 +21,15 @@ jobs:
           echo ${#SUPABASE_URL}
           echo "Secret key length:"
           echo ${#SUPABASE_SECRET_KEY}
-
-      - name: Count assets pending update
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-        run: |
-          RESPONSE=$(curl -s \
-          "${SUPABASE_URL}/rest/v1/asset_update_queue?status=eq.PENDING&select=id" \
-          -H "apikey: ${SUPABASE_SECRET_KEY}" \
-          -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}")
-
-          COUNT=$(echo "$RESPONSE" | grep -o "\"id\"" | wc -l)
-
-          echo "PENDING_COUNT=$COUNT" >> $GITHUB_ENV
-
-          echo "Assets pending update: $COUNT"
-
+- name: Read pending tickers
+env:
+SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+run: |
+curl -s \
+"${SUPABASE_URL}/rest/v1/asset_update_queue?status=eq.PENDING&select=ticker" \
+-H "apikey: ${SUPABASE_SECRET_KEY}" \
+-H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
       - name: Insert queue status log
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
