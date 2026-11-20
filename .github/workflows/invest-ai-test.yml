@@ -1,26 +1,22 @@
-name: INVEST AI Test
+name: INVEST AI Full Load
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  load-prices:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          pip install yfinance requests
+      - run: pip install yfinance requests pandas
 
-      - name: Load first 5 prices
+      - name: Load all assets
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -29,37 +25,47 @@ jobs:
           import requests
           import yfinance as yf
 
-          assets = [
-              ("BBVA.MC","7fe8ce3c-f258-4690-b82a-e1487b3eaee4"),
-              ("BKT.MC","4cbaabe2-ae63-434d-a4e1-3c18ed751385"),
-              ("CABK.MC","95844c0a-7076-421b-86fc-c3b56e9d7ebc"),
-              ("IBE.MC","3c71c23b-2e2c-4f4d-b577-ae79a2e282f0"),
-              ("SAN.MC","eb164cc7-f94a-4b17-9355-013e28b3432e")
-          ]
-
-          SUPABASE_URL = "${{ secrets.SUPABASE_URL }}"
-          SUPABASE_KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
+          url = f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/assets?select=id,ticker"
 
           headers = {
-              "apikey": SUPABASE_KEY,
-              "Authorization": f"Bearer {SUPABASE_KEY}",
-              "Content-Type": "application/json",
-              "Prefer": "resolution=ignore-duplicates"
+              "apikey": "${{ secrets.SUPABASE_SECRET_KEY }}",
+              "Authorization": "Bearer ${{ secrets.SUPABASE_SECRET_KEY }}"
           }
 
-          for ticker, asset_id in assets:
+          assets = requests.get(url, headers=headers).json()
+
+          market_suffix = {
+              "SAN":"SAN.MC",
+              "BBVA":"BBVA.MC",
+              "CABK":"CABK.MC",
+              "BKT":"BKT.MC",
+              "IBE":"IBE.MC",
+              "REP":"REP.MC",
+              "NTGY":"NTGY.MC",
+              "RED":"RED.MC",
+              "ENG":"ENG.MC",
+              "ITX":"ITX.MC",
+              "AMS":"AMS.MC",
+              "AENA":"AENA.MC",
+              "TEF":"TEF.MC"
+          }
+
+          inserted = 0
+
+          for asset in assets:
+
+              ticker = market_suffix.get(asset["ticker"], asset["ticker"])
 
               try:
                   df = yf.Ticker(ticker).history(period="5d")
 
                   if len(df) == 0:
-                      print(f"{ticker} -> NO DATA")
                       continue
 
                   latest = df.iloc[-1]
 
                   payload = {
-                      "asset_id": asset_id,
+                      "asset_id": asset["id"],
                       "trading_date": str(df.index[-1].date()),
                       "open_price": float(latest["Open"]),
                       "high_price": float(latest["High"]),
@@ -70,14 +76,23 @@ jobs:
                   }
 
                   r = requests.post(
-                      f"{SUPABASE_URL}/rest/v1/asset_prices",
-                      headers=headers,
+                      f"{'${{ secrets.SUPABASE_URL }}'}/rest/v1/asset_prices",
+                      headers={
+                          "apikey":"${{ secrets.SUPABASE_SECRET_KEY }}",
+                          "Authorization":"Bearer ${{ secrets.SUPABASE_SECRET_KEY }}",
+                          "Content-Type":"application/json",
+                          "Prefer":"resolution=ignore-duplicates"
+                      },
                       json=payload
                   )
 
-                  print(f"{ticker} -> {r.status_code}")
+                  if r.status_code in (200, 201):
+                      inserted += 1
+
+                  print(ticker, r.status_code)
 
               except Exception as e:
-                  print(f"{ticker} ERROR -> {e}")
+                  print(ticker, e)
 
+          print("INSERTED =", inserted)
           EOF
