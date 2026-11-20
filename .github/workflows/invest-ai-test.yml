@@ -18,9 +18,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests
+          pip install yfinance requests
 
-- name: Load first 5 prices
+      - name: Load first 5 prices
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -37,8 +37,8 @@ jobs:
               ("SAN.MC","eb164cc7-f94a-4b17-9355-013e28b3432e")
           ]
 
-          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
-          SUPABASE_KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
+          SUPABASE_URL = "${{ secrets.SUPABASE_URL }}"
+          SUPABASE_KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
 
           headers = {
               "apikey": SUPABASE_KEY,
@@ -49,32 +49,35 @@ jobs:
 
           for ticker, asset_id in assets:
 
-              df = yf.Ticker(ticker).history(period="5d")
+              try:
+                  df = yf.Ticker(ticker).history(period="5d")
 
-              latest = df.iloc[-1]
+                  if len(df) == 0:
+                      print(f"{ticker} -> NO DATA")
+                      continue
 
-              payload = {
-                  "asset_id": asset_id,
-                  "trading_date": str(df.index[-1].date()),
-                  "open_price": float(latest["Open"]),
-                  "high_price": float(latest["High"]),
-                  "low_price": float(latest["Low"]),
-                  "close_price": float(latest["Close"]),
-                  "adjusted_close": float(latest["Close"]),
-                  "volume": int(latest["Volume"])
-              }
+                  latest = df.iloc[-1]
 
-              r = requests.post(
-                  f"{SUPABASE_URL}/rest/v1/asset_prices",
-                  headers=headers,
-                  json=payload
-              )
+                  payload = {
+                      "asset_id": asset_id,
+                      "trading_date": str(df.index[-1].date()),
+                      "open_price": float(latest["Open"]),
+                      "high_price": float(latest["High"]),
+                      "low_price": float(latest["Low"]),
+                      "close_price": float(latest["Close"]),
+                      "adjusted_close": float(latest["Close"]),
+                      "volume": int(latest["Volume"])
+                  }
 
-              print(ticker, r.status_code)
+                  r = requests.post(
+                      f"{SUPABASE_URL}/rest/v1/asset_prices",
+                      headers=headers,
+                      json=payload
+                  )
 
-          EOF
+                  print(f"{ticker} -> {r.status_code}")
 
-          assets = response.json()[:5]
+              except Exception as e:
+                  print(f"{ticker} ERROR -> {e}")
 
-          print(json.dumps(assets, indent=2))
           EOF
