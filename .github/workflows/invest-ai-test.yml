@@ -27,7 +27,12 @@ jobs:
 
           ticker = yf.Ticker("IBE.MC")
 
-          price = ticker.history(period="5d")
+          df = ticker.history(period="5d")
 
-          print(price.tail())
+          latest = df.iloc[-1]
+
+          print("LATEST CLOSE:", latest["Close"])
+          print("LATEST VOLUME:", latest["Volume"])
+
+          print(df.tail())
           EOF
