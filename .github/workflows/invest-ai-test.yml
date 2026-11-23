@@ -66,7 +66,13 @@ jobs:
               rs = gain / loss
               rsi = 100 - (100 / (1 + rs))
 
-              latest_rsi = float(rsi.iloc[-1])
+latest_rsi = rsi.iloc[-1]
+
+if pd.isna(latest_rsi):
+    continue
+
+latest_rsi = float(latest_rsi)
+
 
               r = requests.patch(
                   f"{URL}/rest/v1/technical_indicators?asset_id=eq.{asset_id}",
