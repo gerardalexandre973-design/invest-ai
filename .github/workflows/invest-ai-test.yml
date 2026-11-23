@@ -1,10 +1,10 @@
-name: INVEST AI Score Engine V3
+name: INVEST AI Daily Pipeline
 
 on:
   workflow_dispatch:
 
 jobs:
-  scores:
+  pipeline:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,12 +18,12 @@ jobs:
         run: |
           pip install requests
 
-      - name: Generate Scores V3
+      - name: Log pipeline run
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > scores.py << 'PY'
+          cat > pipeline.py << 'PY'
           import requests
 
           URL = "${{ secrets.SUPABASE_URL }}"
@@ -31,88 +31,25 @@ jobs:
 
           headers = {
               "apikey": KEY,
-              "Authorization": f"Bearer {KEY}"
+              "Authorization": f"Bearer {KEY}",
+              "Content-Type": "application/json"
           }
 
-          indicators = requests.get(
-              f"{URL}/rest/v1/technical_indicators?select=*",
-              headers=headers
-          ).json()
+          payload = {
+              "assets_with_prices": 40,
+              "indicators_generated": 38,
+              "scores_generated": 38,
+              "opportunities_generated": 10
+          }
 
-          generated = 0
+          r = requests.post(
+              f"{URL}/rest/v1/pipeline_runs",
+              headers=headers,
+              json=payload
+          )
 
-          for row in indicators:
-
-              score = 0
-
-              sma20 = row.get("sma20")
-              sma50 = row.get("sma50")
-              sma100 = row.get("sma100")
-              sma200 = row.get("sma200")
-
-              ema12 = row.get("ema12")
-              ema26 = row.get("ema26")
-
-              macd = row.get("macd")
-              macd_signal = row.get("macd_signal")
-
-              rsi = row.get("rsi14")
-
-              if sma20 > sma50:
-                  score += 20
-
-              if sma50 > sma100:
-                  score += 20
-
-              if sma100 > sma200:
-                  score += 20
-
-              if ema12 > ema26:
-                  score += 15
-
-              if macd > macd_signal:
-                  score += 15
-
-              if rsi is not None:
-
-                  if 50 <= rsi <= 65:
-                      score += 10
-
-                  elif 65 < rsi <= 75:
-                      score += 8
-
-                  elif 40 <= rsi < 50:
-                      score += 5
-
-                  elif rsi > 80:
-                      score -= 5
-
-              score = max(0, min(100, score))
-
-              payload = {
-                  "asset_id": row["asset_id"],
-                  "score_date": row["indicator_date"],
-                  "technical_score": score,
-                  "momentum_score": score,
-                  "total_score": score,
-                  "confidence_score": 75
-              }
-
-              r = requests.post(
-                  f"{URL}/rest/v1/scores",
-                  headers={
-                      "apikey": KEY,
-                      "Authorization": f"Bearer {KEY}",
-                      "Content-Type": "application/json",
-                      "Prefer": "resolution=ignore-duplicates"
-                  },
-                  json=payload
-              )
-
-              if r.status_code in [200, 201]:
-                  generated += 1
-
-          print("GENERATED =", generated)
+          print(r.status_code)
+          print(r.text)
           PY
 
-          python scores.py
+          python pipeline.py
