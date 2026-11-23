@@ -1,10 +1,10 @@
-name: INVEST AI Score Engine V2
+name: INVEST AI EMA MACD Engine
 
 on:
   workflow_dispatch:
 
 jobs:
-  scores:
+  indicators:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,13 +18,14 @@ jobs:
         run: |
           pip install requests pandas
 
-      - name: Generate Scores V2
+      - name: Calculate EMA MACD
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > scores.py << 'PY'
+          cat > ema_macd.py << 'PY'
           import requests
+          import pandas as pd
 
           URL = "${{ secrets.SUPABASE_URL }}"
           KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
@@ -37,73 +38,4 @@ jobs:
           indicators = requests.get(
               f"{URL}/rest/v1/technical_indicators?select=*",
               headers=headers
-          ).json()
-
-          generated = 0
-
-          for row in indicators:
-
-              score = 0
-
-              sma20  = row.get("sma20")
-              sma50  = row.get("sma50")
-              sma100 = row.get("sma100")
-              sma200 = row.get("sma200")
-              rsi14  = row.get("rsi14")
-
-              if sma20 and sma50 and sma20 > sma50:
-                  score += 25
-
-              if sma50 and sma100 and sma50 > sma100:
-                  score += 25
-
-              if sma100 and sma200 and sma100 > sma200:
-                  score += 30
-
-              if rsi14 is not None:
-
-                  if 50 <= rsi14 <= 65:
-                      score += 20
-
-                  elif 65 < rsi14 <= 75:
-                      score += 15
-
-                  elif 40 <= rsi14 < 50:
-                      score += 10
-
-                  elif rsi14 > 80:
-                      score -= 5
-
-              if score < 0:
-                  score = 0
-
-              if score > 100:
-                  score = 100
-
-              payload = {
-                  "asset_id": row["asset_id"],
-                  "score_date": row["indicator_date"],
-                  "technical_score": score,
-                  "momentum_score": score,
-                  "total_score": score,
-                  "confidence_score": 70
-              }
-
-              r = requests.post(
-                  f"{URL}/rest/v1/scores",
-                  headers={
-                      "apikey": KEY,
-                      "Authorization": f"Bearer {KEY}",
-                      "Content-Type": "application/json",
-                      "Prefer": "resolution=ignore-duplicates"
-                  },
-                  json=payload
-              )
-
-              if r.status_code in (200, 201):
-                  generated += 1
-
-          print("GENERATED =", generated)
-          PY
-
-          python scores.py
+          ).json
