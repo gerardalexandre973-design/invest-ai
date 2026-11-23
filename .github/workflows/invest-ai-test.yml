@@ -1,10 +1,10 @@
-name: INVEST AI Score Engine
+name: INVEST AI RSI Engine
 
 on:
   workflow_dispatch:
 
 jobs:
-  scores:
+  rsi:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,13 +16,14 @@ jobs:
 
       - run: pip install requests pandas
 
-      - name: Generate Scores
+      - name: Calculate RSI14
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           python << 'EOF'
           import requests
+          import pandas as pd
 
           URL="${{ secrets.SUPABASE_URL }}"
           KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
@@ -37,43 +38,12 @@ jobs:
               headers=headers
           ).json()
 
-          generated = 0
+          updated = 0
 
           for row in indicators:
 
-              score = 0
+              asset_id = row["asset_id"]
 
-              if row["sma20"] > row["sma50"]:
-                  score += 30
-
-              if row["sma50"] > row["sma100"]:
-                  score += 30
-
-              if row["sma100"] > row["sma200"]:
-                  score += 40
-
-              payload = {
-                  "asset_id": row["asset_id"],
-                  "score_date": row["indicator_date"],
-                  "technical_score": score,
-                  "total_score": score,
-                  "confidence_score": 70
-              }
-
-              r = requests.post(
-                  f"{URL}/rest/v1/scores",
-                  headers={
-                      "apikey": KEY,
-                      "Authorization": f"Bearer {KEY}",
-                      "Content-Type": "application/json",
-                      "Prefer": "resolution=ignore-duplicates"
-                  },
-                  json=payload
-              )
-
-              if r.status_code in (200,201):
-                  generated += 1
-
-          print("GENERATED =", generated)
-
-          EOF
+              prices = requests.get(
+                  f"{URL}/rest/v1/asset_prices?asset_id=eq.{asset_id}&select=close_price&order=trading_date",
+                  headers=
