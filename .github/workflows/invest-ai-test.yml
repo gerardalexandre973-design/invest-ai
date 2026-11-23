@@ -1,10 +1,10 @@
-name: INVEST AI Technical Indicators
+name: INVEST AI Score Engine
 
 on:
   workflow_dispatch:
 
 jobs:
-  indicators:
+  scores:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,75 +16,64 @@ jobs:
 
       - run: pip install requests pandas
 
-      - name: Generate SMA indicators
+      - name: Generate Scores
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           python << 'EOF'
           import requests
-          import pandas as pd
 
-          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
-          SUPABASE_KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
+          URL="${{ secrets.SUPABASE_URL }}"
+          KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
 
           headers = {
-              "apikey": SUPABASE_KEY,
-              "Authorization": f"Bearer {SUPABASE_KEY}"
+              "apikey": KEY,
+              "Authorization": f"Bearer {KEY}"
           }
 
-          assets = requests.get(
-              f"{SUPABASE_URL}/rest/v1/assets?select=id",
+          indicators = requests.get(
+              f"{URL}/rest/v1/technical_indicators?select=*",
               headers=headers
           ).json()
 
-          processed = 0
+          generated = 0
 
-          for asset in assets:
+          for row in indicators:
 
-              asset_id = asset["id"]
+              score = 0
 
-              prices = requests.get(
-                  f"{SUPABASE_URL}/rest/v1/asset_prices?asset_id=eq.{asset_id}&select=trading_date,close_price&order=trading_date",
-                  headers=headers
-              ).json()
+              if row["sma20"] > row["sma50"]:
+                  score += 30
 
-              if len(prices) < 200:
-                  continue
+              if row["sma50"] > row["sma100"]:
+                  score += 30
 
-              df = pd.DataFrame(prices)
-
-              df["close_price"] = pd.to_numeric(df["close_price"])
-
-              sma20 = df["close_price"].tail(20).mean()
-              sma50 = df["close_price"].tail(50).mean()
-              sma100 = df["close_price"].tail(100).mean()
-              sma200 = df["close_price"].tail(200).mean()
-
-              last_date = df.iloc[-1]["trading_date"]
+              if row["sma100"] > row["sma200"]:
+                  score += 40
 
               payload = {
-                  "asset_id": asset_id,
-                  "indicator_date": last_date,
-                  "sma20": float(sma20),
-                  "sma50": float(sma50),
-                  "sma100": float(sma100),
-                  "sma200": float(sma200)
+                  "asset_id": row["asset_id"],
+                  "score_date": row["indicator_date"],
+                  "technical_score": score,
+                  "total_score": score,
+                  "confidence_score": 70
               }
 
               r = requests.post(
-                  f"{SUPABASE_URL}/rest/v1/technical_indicators",
+                  f"{URL}/rest/v1/scores",
                   headers={
-                      "apikey": SUPABASE_KEY,
-                      "Authorization": f"Bearer {SUPABASE_KEY}",
-                      "Content-Type": "application/json"
+                      "apikey": KEY,
+                      "Authorization": f"Bearer {KEY}",
+                      "Content-Type": "application/json",
+                      "Prefer": "resolution=ignore-duplicates"
                   },
                   json=payload
               )
 
               if r.status_code in (200,201):
-                  processed += 1
+                  generated += 1
 
-          print("PROCESSED =", processed)
+          print("GENERATED =", generated)
 
           EOF
