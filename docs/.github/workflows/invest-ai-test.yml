@@ -1,17 +1,103 @@
-name: INVEST AI Test
+name: INVEST AI Historical Load
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  historical-load:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Test execution
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install yfinance requests pandas
+
+      - name: Load 1 year history
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          echo "INVEST AI workflow executed successfully"
-          date
+          python << 'EOF'
+          import requests
+          import yfinance as yf
+
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
+
+          headers = {
+              "apikey": SUPABASE_KEY,
+              "Authorization": f"Bearer {SUPABASE_KEY}"
+          }
+
+          assets = requests.get(
+              f"{SUPABASE_URL}/rest/v1/assets?select=id,ticker",
+              headers=headers
+          ).json()
+
+          mapping = requests.get(
+              f"{SUPABASE_URL}/rest/v1/asset_price_sources?select=asset_id,yahoo_symbol",
+              headers=headers
+          ).json()
+
+          yahoo_map = {
+              row["asset_id"]: row["yahoo_symbol"]
+              for row in mapping
+          }
+
+          inserted = 0
+
+          for asset in assets:
+
+              asset_id = asset["id"]
+
+              if asset_id not in yahoo_map:
+                  continue
+
+              yahoo_symbol = yahoo_map[asset_id]
+
+              try:
+
+                  df = yf.Ticker(yahoo_symbol).history(period="1y")
+
+                  if len(df) == 0:
+                      continue
+
+                  for idx, row in df.iterrows():
+
+                      payload = {
+                          "asset_id": asset_id,
+                          "trading_date": str(idx.date()),
+                          "open_price": float(row["Open"]),
+                          "high_price": float(row["High"]),
+                          "low_price": float(row["Low"]),
+                          "close_price": float(row["Close"]),
+                          "adjusted_close": float(row["Close"]),
+                          "volume": int(row["Volume"])
+                      }
+
+                      r = requests.post(
+                          f"{SUPABASE_URL}/rest/v1/asset_prices",
+                          headers={
+                              "apikey": SUPABASE_KEY,
+                              "Authorization": f"Bearer {SUPABASE_KEY}",
+                              "Content-Type": "application/json",
+                              "Prefer": "resolution=ignore-duplicates"
+                          },
+                          json=payload
+                      )
+
+                      if r.status_code in (200, 201):
+                          inserted += 1
+
+                  print(yahoo_symbol, len(df))
+
+              except Exception as e:
+                  print(yahoo_symbol, e)
+
+          print("TOTAL INSERTED =", inserted)
+
+          EOF
