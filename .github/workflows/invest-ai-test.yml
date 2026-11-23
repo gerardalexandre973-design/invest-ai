@@ -1,10 +1,10 @@
-name: INVEST AI Technical Indicators V2
+name: INVEST AI Score Engine V3
 
 on:
   workflow_dispatch:
 
 jobs:
-  indicators:
+  scores:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,16 +16,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pandas numpy
+          pip install requests
 
-      - name: Generate indicators
+      - name: Generate Scores V3
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > indicators.py << 'PY'
+          cat > scores.py << 'PY'
           import requests
-          import pandas as pd
 
           URL = "${{ secrets.SUPABASE_URL }}"
           KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
@@ -35,70 +34,72 @@ jobs:
               "Authorization": f"Bearer {KEY}"
           }
 
-          assets = requests.get(
-              f"{URL}/rest/v1/assets?select=id",
+          indicators = requests.get(
+              f"{URL}/rest/v1/technical_indicators?select=*",
               headers=headers
           ).json()
 
           generated = 0
 
-          for asset in assets:
+          for row in indicators:
 
-              asset_id = asset["id"]
+              score = 0
 
-              prices = requests.get(
-                  f"{URL}/rest/v1/asset_prices?asset_id=eq.{asset_id}&select=trading_date,close_price&order=trading_date",
-                  headers=headers
-              ).json()
+              sma20 = row.get("sma20")
+              sma50 = row.get("sma50")
+              sma100 = row.get("sma100")
+              sma200 = row.get("sma200")
 
-              if len(prices) < 200:
-                  continue
+              ema12 = row.get("ema12")
+              ema26 = row.get("ema26")
 
-              df = pd.DataFrame(prices)
+              macd = row.get("macd")
+              macd_signal = row.get("macd_signal")
 
-              close = pd.to_numeric(df["close_price"])
+              rsi = row.get("rsi14")
 
-              sma20 = close.rolling(20).mean().iloc[-1]
-              sma50 = close.rolling(50).mean().iloc[-1]
-              sma100 = close.rolling(100).mean().iloc[-1]
-              sma200 = close.rolling(200).mean().iloc[-1]
+              if sma20 > sma50:
+                  score += 20
 
-              ema12 = close.ewm(span=12, adjust=False).mean()
-              ema26 = close.ewm(span=26, adjust=False).mean()
+              if sma50 > sma100:
+                  score += 20
 
-              macd = ema12 - ema26
-              macd_signal = macd.ewm(span=9, adjust=False).mean()
+              if sma100 > sma200:
+                  score += 20
 
-              delta = close.diff()
+              if ema12 > ema26:
+                  score += 15
 
-              gain = delta.clip(lower=0)
-              loss = -delta.clip(upper=0)
+              if macd > macd_signal:
+                  score += 15
 
-              avg_gain = gain.rolling(14).mean()
-              avg_loss = loss.rolling(14).mean()
+              if rsi is not None:
 
-              if avg_loss.iloc[-1] == 0:
-                  continue
+                  if 50 <= rsi <= 65:
+                      score += 10
 
-              rs = avg_gain / avg_loss
-              rsi14 = (100 - (100 / (1 + rs))).iloc[-1]
+                  elif 65 < rsi <= 75:
+                      score += 8
+
+                  elif 40 <= rsi < 50:
+                      score += 5
+
+                  elif rsi > 80:
+                      score -= 5
+
+              score = max(0, min(100, score))
 
               payload = {
-                  "asset_id": asset_id,
-                  "indicator_date": str(df.iloc[-1]["trading_date"]),
-                  "sma20": round(float(sma20),4),
-                  "sma50": round(float(sma50),4),
-                  "sma100": round(float(sma100),4),
-                  "sma200": round(float(sma200),4),
-                  "ema12": round(float(ema12.iloc[-1]),4),
-                  "ema26": round(float(ema26.iloc[-1]),4),
-                  "macd": round(float(macd.iloc[-1]),4),
-                  "macd_signal": round(float(macd_signal.iloc[-1]),4),
-                  "rsi14": round(float(rsi14),2)
+                  "asset_id": row["asset_id"],
+                  "score_date": row["indicator_date"],
+                  "technical_score": score,
+                  "momentum_score": score,
+                  "total_score": score,
+                  "confidence_score": 75
               }
 
               r = requests.post(
-                  f"{URL}/rest/v1/technical_indicators",
+                  f"{URL}/rest/v1/scores",
                   headers={
                       "apikey": KEY,
                       "Authorization": f"Bearer {KEY}",
@@ -108,12 +109,10 @@ jobs:
                   json=payload
               )
 
-              if r.status_code in (200,201):
+              if r.status_code in [200, 201]:
                   generated += 1
-
-              print(asset_id, r.status_code)
 
           print("GENERATED =", generated)
           PY
 
-          python indicators.py
+          python scores.py
