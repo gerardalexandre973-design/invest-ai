@@ -1,10 +1,10 @@
-name: INVEST AI RSI Engine
+name: INVEST AI Score Engine V2
 
 on:
   workflow_dispatch:
 
 jobs:
-  rsi:
+  scores:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,17 +16,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pandas numpy
+          pip install requests pandas
 
-      - name: Calculate RSI14
+      - name: Generate Scores V2
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > rsi.py << 'PY'
+          cat > scores.py << 'PY'
           import requests
-          import pandas as pd
-          import numpy as np
 
           URL = "${{ secrets.SUPABASE_URL }}"
           KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
@@ -41,61 +39,71 @@ jobs:
               headers=headers
           ).json()
 
-          updated = 0
+          generated = 0
 
           for row in indicators:
 
-              asset_id = row["asset_id"]
+              score = 0
 
-              prices = requests.get(
-                  f"{URL}/rest/v1/asset_prices?asset_id=eq.{asset_id}&select=close_price&order=trading_date",
-                  headers=headers
-              ).json()
+              sma20  = row.get("sma20")
+              sma50  = row.get("sma50")
+              sma100 = row.get("sma100")
+              sma200 = row.get("sma200")
+              rsi14  = row.get("rsi14")
 
-              if len(prices) < 20:
-                  continue
+              if sma20 and sma50 and sma20 > sma50:
+                  score += 25
 
-              df = pd.DataFrame(prices)
+              if sma50 and sma100 and sma50 > sma100:
+                  score += 25
 
-              close = pd.to_numeric(df["close_price"])
+              if sma100 and sma200 and sma100 > sma200:
+                  score += 30
 
-              delta = close.diff()
+              if rsi14 is not None:
 
-              gain = delta.clip(lower=0)
-              loss = -delta.clip(upper=0)
+                  if 50 <= rsi14 <= 65:
+                      score += 20
 
-              avg_gain = gain.rolling(14).mean()
-              avg_loss = loss.rolling(14).mean()
+                  elif 65 < rsi14 <= 75:
+                      score += 15
 
-              if avg_loss.iloc[-1] == 0:
-                  continue
+                  elif 40 <= rsi14 < 50:
+                      score += 10
 
-              rs = avg_gain / avg_loss
-              rsi = 100 - (100 / (1 + rs))
+                  elif rsi14 > 80:
+                      score -= 5
 
-              latest_rsi = rsi.iloc[-1]
+              if score < 0:
+                  score = 0
 
-              if pd.isna(latest_rsi):
-                  continue
+              if score > 100:
+                  score = 100
 
-              latest_rsi = round(float(latest_rsi), 2)
+              payload = {
+                  "asset_id": row["asset_id"],
+                  "score_date": row["indicator_date"],
+                  "technical_score": score,
+                  "momentum_score": score,
+                  "total_score": score,
+                  "confidence_score": 70
+              }
 
-              r = requests.patch(
-                  f"{URL}/rest/v1/technical_indicators?asset_id=eq.{asset_id}",
+              r = requests.post(
+                  f"{URL}/rest/v1/scores",
                   headers={
                       "apikey": KEY,
                       "Authorization": f"Bearer {KEY}",
-                      "Content-Type": "application/json"
+                      "Content-Type": "application/json",
+                      "Prefer": "resolution=ignore-duplicates"
                   },
-                  json={
-                      "rsi14": latest_rsi
-                  }
+                  json=payload
               )
 
-              if r.status_code in [200, 204]:
-                  updated += 1
+              if r.status_code in (200, 201):
+                  generated += 1
 
-          print("UPDATED =", updated)
+          print("GENERATED =", generated)
           PY
 
-          python rsi.py
+          python scores.py
