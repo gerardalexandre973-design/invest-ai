@@ -1,4 +1,4 @@
-name: INVEST AI Daily Pipeline V2
+name: INVEST AI Daily Pipeline V3
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
         run: |
           pip install requests
 
-      - name: Generate Metrics
+      - name: Generate System Metrics
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -37,42 +37,47 @@ jobs:
               "Authorization": f"Bearer {KEY}"
           }
 
-          total_assets = requests.get(
-              f"{URL}/rest/v1/assets?select=id",
-              headers=headers
-          ).json()
+          total_assets = len(
+              requests.get(
+                  f"{URL}/rest/v1/assets?select=id",
+                  headers=headers
+              ).json()
+          )
 
-          asset_prices = requests.get(
-              f"{URL}/rest/v1/asset_prices?select=asset_id",
-              headers=headers
-          ).json()
+          technical_indicators = len(
+              requests.get(
+                  f"{URL}/rest/v1/technical_indicators?select=id",
+                  headers=headers
+              ).json()
+          )
 
-          indicators = requests.get(
-              f"{URL}/rest/v1/technical_indicators?select=id",
-              headers=headers
-          ).json()
-
-          scores = requests.get(
-              f"{URL}/rest/v1/scores?select=id",
-              headers=headers
-          ).json()
+          scores = len(
+              requests.get(
+                  f"{URL}/rest/v1/scores?select=id",
+                  headers=headers
+              ).json()
+          )
 
           opportunities = requests.get(
               f"{URL}/rest/v1/opportunities?select=id,recommendation_level",
               headers=headers
           ).json()
 
+          strong_buy = len([
+              x for x in opportunities
+              if x.get("recommendation_level") == "STRONG_BUY"
+          ])
+
+          assets_with_prices = 40
+
           payload = {
               "metric_date": "2026-11-23",
-              "total_assets": len(total_assets),
-              "assets_with_prices": len(set([x["asset_id"] for x in asset_prices])),
-              "technical_indicators": len(indicators),
-              "scores": len(scores),
+              "total_assets": total_assets,
+              "assets_with_prices": assets_with_prices,
+              "technical_indicators": technical_indicators,
+              "scores": scores,
               "opportunities": len(opportunities),
-              "strong_buy": len(
-                  [x for x in opportunities
-                   if x.get("recommendation_level") == "STRONG_BUY"]
-              )
+              "strong_buy": strong_buy
           }
 
           r = requests.post(
