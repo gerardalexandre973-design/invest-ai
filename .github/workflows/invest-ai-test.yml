@@ -21,7 +21,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          python << 'EOF'
+                    python << 'EOF'
           import requests
           import pandas as pd
 
@@ -46,4 +46,39 @@ jobs:
 
               prices = requests.get(
                   f"{URL}/rest/v1/asset_prices?asset_id=eq.{asset_id}&select=close_price&order=trading_date",
-                  headers=
+                  headers=headers
+              ).json()
+
+              if len(prices) < 15:
+                  continue
+
+              df = pd.DataFrame(prices)
+
+              close = pd.to_numeric(df["close_price"])
+
+              delta = close.diff()
+
+              gain = delta.where(delta > 0, 0).rolling(14).mean()
+              loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+
+              rs = gain / loss
+              rsi = 100 - (100 / (1 + rs))
+
+              latest_rsi = float(rsi.iloc[-1])
+
+              r = requests.patch(
+                  f"{URL}/rest/v1/technical_indicators?asset_id=eq.{asset_id}",
+                  headers={
+                      "apikey": KEY,
+                      "Authorization": f"Bearer {KEY}",
+                      "Content-Type": "application/json"
+                  },
+                  json={"rsi14": latest_rsi}
+              )
+
+              if r.status_code in (200, 204):
+                  updated += 1
+
+          print("UPDATED =", updated)
+
+          EOF
