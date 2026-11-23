@@ -1,4 +1,4 @@
-name: INVEST AI Daily Pipeline
+name: INVEST AI Daily Pipeline V2
 
 on:
   workflow_dispatch:
@@ -21,12 +21,12 @@ jobs:
         run: |
           pip install requests
 
-      - name: Log pipeline run
+      - name: Generate Metrics
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > pipeline.py << 'PY'
+          cat > metrics.py << 'PY'
           import requests
 
           URL = "${{ secrets.SUPABASE_URL }}"
@@ -34,25 +34,60 @@ jobs:
 
           headers = {
               "apikey": KEY,
-              "Authorization": f"Bearer {KEY}",
-              "Content-Type": "application/json"
+              "Authorization": f"Bearer {KEY}"
           }
 
+          total_assets = requests.get(
+              f"{URL}/rest/v1/assets?select=id",
+              headers=headers
+          ).json()
+
+          asset_prices = requests.get(
+              f"{URL}/rest/v1/asset_prices?select=asset_id",
+              headers=headers
+          ).json()
+
+          indicators = requests.get(
+              f"{URL}/rest/v1/technical_indicators?select=id",
+              headers=headers
+          ).json()
+
+          scores = requests.get(
+              f"{URL}/rest/v1/scores?select=id",
+              headers=headers
+          ).json()
+
+          opportunities = requests.get(
+              f"{URL}/rest/v1/opportunities?select=id,recommendation_level",
+              headers=headers
+          ).json()
+
           payload = {
-              "assets_with_prices": 40,
-              "indicators_generated": 38,
-              "scores_generated": 38,
-              "opportunities_generated": 10
+              "metric_date": "2026-11-23",
+              "total_assets": len(total_assets),
+              "assets_with_prices": len(set([x["asset_id"] for x in asset_prices])),
+              "technical_indicators": len(indicators),
+              "scores": len(scores),
+              "opportunities": len(opportunities),
+              "strong_buy": len(
+                  [x for x in opportunities
+                   if x.get("recommendation_level") == "STRONG_BUY"]
+              )
           }
 
           r = requests.post(
-              f"{URL}/rest/v1/pipeline_runs",
-              headers=headers,
+              f"{URL}/rest/v1/system_metrics",
+              headers={
+                  "apikey": KEY,
+                  "Authorization": f"Bearer {KEY}",
+                  "Content-Type": "application/json"
+              },
               json=payload
           )
 
           print(r.status_code)
-          print(r.text)
+          print(payload)
+
           PY
 
-          python pipeline.py
+          python metrics.py
