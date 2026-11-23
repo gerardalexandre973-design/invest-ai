@@ -14,19 +14,21 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: pip install requests pandas
+      - name: Install dependencies
+        run: |
+          pip install requests pandas
 
       - name: Calculate RSI14
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-                    python << 'EOF'
+          cat > rsi.py << 'PY'
           import requests
           import pandas as pd
 
-          URL="${{ secrets.SUPABASE_URL }}"
-          KEY="${{ secrets.SUPABASE_SECRET_KEY }}"
+          URL = "${{ secrets.SUPABASE_URL }}"
+          KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
 
           headers = {
               "apikey": KEY,
@@ -80,5 +82,6 @@ jobs:
                   updated += 1
 
           print("UPDATED =", updated)
+          PY
 
-          EOF
+          python rsi.py
