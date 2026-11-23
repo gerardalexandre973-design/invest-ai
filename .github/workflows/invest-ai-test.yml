@@ -16,7 +16,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pandas
+          pip install requests pandas numpy
 
       - name: Calculate RSI14
         env:
@@ -26,6 +26,7 @@ jobs:
           cat > rsi.py << 'PY'
           import requests
           import pandas as pd
+          import numpy as np
 
           URL = "${{ secrets.SUPABASE_URL }}"
           KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
@@ -51,7 +52,7 @@ jobs:
                   headers=headers
               ).json()
 
-              if len(prices) < 15:
+              if len(prices) < 20:
                   continue
 
               df = pd.DataFrame(prices)
@@ -60,19 +61,24 @@ jobs:
 
               delta = close.diff()
 
-              gain = delta.where(delta > 0, 0).rolling(14).mean()
-              loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+              gain = delta.clip(lower=0)
+              loss = -delta.clip(upper=0)
 
-              rs = gain / loss
+              avg_gain = gain.rolling(14).mean()
+              avg_loss = loss.rolling(14).mean()
+
+              if avg_loss.iloc[-1] == 0:
+                  continue
+
+              rs = avg_gain / avg_loss
               rsi = 100 - (100 / (1 + rs))
 
-latest_rsi = rsi.iloc[-1]
+              latest_rsi = rsi.iloc[-1]
 
-if pd.isna(latest_rsi):
-    continue
+              if pd.isna(latest_rsi):
+                  continue
 
-latest_rsi = float(latest_rsi)
-
+              latest_rsi = round(float(latest_rsi), 2)
 
               r = requests.patch(
                   f"{URL}/rest/v1/technical_indicators?asset_id=eq.{asset_id}",
@@ -81,10 +87,12 @@ latest_rsi = float(latest_rsi)
                       "Authorization": f"Bearer {KEY}",
                       "Content-Type": "application/json"
                   },
-                  json={"rsi14": latest_rsi}
+                  json={
+                      "rsi14": latest_rsi
+                  }
               )
 
-              if r.status_code in (200, 204):
+              if r.status_code in [200, 204]:
                   updated += 1
 
           print("UPDATED =", updated)
