@@ -3,6 +3,9 @@ name: INVEST AI Daily Pipeline
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: '0 6 * * *'
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
