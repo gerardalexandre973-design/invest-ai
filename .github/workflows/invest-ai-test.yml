@@ -26,4 +26,62 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > pipeline
+          cat > pipeline_v4.py << 'PY'
+          import requests
+          from datetime import date
+
+          URL = "${{ secrets.SUPABASE_URL }}"
+          KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
+
+          headers = {
+              "apikey": KEY,
+              "Authorization": f"Bearer {KEY}"
+          }
+
+          def count_rows(endpoint):
+              r = requests.get(
+                  f"{URL}/rest/v1/{endpoint}?select=id",
+                  headers=headers
+              )
+              return len(r.json())
+
+          total_assets = count_rows("assets")
+          technical_indicators = count_rows("technical_indicators")
+          scores = count_rows("scores")
+
+          opportunities_data = requests.get(
+              f"{URL}/rest/v1/opportunities?select=id,recommendation_level",
+              headers=headers
+          ).json()
+
+          strong_buy = len([
+              x for x in opportunities_data
+              if x.get("recommendation_level") == "STRONG_BUY"
+          ])
+
+          payload = {
+              "metric_date": str(date.today()),
+              "total_assets": total_assets,
+              "assets_with_prices": 40,
+              "technical_indicators": technical_indicators,
+              "scores": scores,
+              "opportunities": len(opportunities_data),
+              "strong_buy": strong_buy
+          }
+
+          response = requests.post(
+              f"{URL}/rest/v1/system_metrics",
+              headers={
+                  "apikey": KEY,
+                  "Authorization": f"Bearer {KEY}",
+                  "Content-Type": "application/json",
+                  "Prefer": "return=representation"
+              },
+              json=payload
+          )
+
+          print(response.status_code)
+          print(response.text)
+          PY
+
+          python pipeline_v4.py
