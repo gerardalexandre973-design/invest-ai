@@ -1,4 +1,4 @@
-name: INVEST AI Daily Pipeline V3
+name: INVEST AI Pipeline V4
 
 on:
   workflow_dispatch:
@@ -21,78 +21,9 @@ jobs:
         run: |
           pip install requests
 
-      - name: Generate System Metrics
+      - name: Update System Metrics
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > metrics.py << 'PY'
-          import requests
-
-          URL = "${{ secrets.SUPABASE_URL }}"
-          KEY = "${{ secrets.SUPABASE_SECRET_KEY }}"
-
-          headers = {
-              "apikey": KEY,
-              "Authorization": f"Bearer {KEY}"
-          }
-
-          total_assets = len(
-              requests.get(
-                  f"{URL}/rest/v1/assets?select=id",
-                  headers=headers
-              ).json()
-          )
-
-          technical_indicators = len(
-              requests.get(
-                  f"{URL}/rest/v1/technical_indicators?select=id",
-                  headers=headers
-              ).json()
-          )
-
-          scores = len(
-              requests.get(
-                  f"{URL}/rest/v1/scores?select=id",
-                  headers=headers
-              ).json()
-          )
-
-          opportunities = requests.get(
-              f"{URL}/rest/v1/opportunities?select=id,recommendation_level",
-              headers=headers
-          ).json()
-
-          strong_buy = len([
-              x for x in opportunities
-              if x.get("recommendation_level") == "STRONG_BUY"
-          ])
-
-          assets_with_prices = 40
-
-          payload = {
-              "metric_date": "2026-11-23",
-              "total_assets": total_assets,
-              "assets_with_prices": assets_with_prices,
-              "technical_indicators": technical_indicators,
-              "scores": scores,
-              "opportunities": len(opportunities),
-              "strong_buy": strong_buy
-          }
-
-          r = requests.post(
-              f"{URL}/rest/v1/system_metrics",
-              headers={
-                  "apikey": KEY,
-                  "Authorization": f"Bearer {KEY}",
-                  "Content-Type": "application/json"
-              },
-              json=payload
-          )
-
-          print(r.status_code)
-          print(payload)
-
-          PY
-
-          python metrics.py
+          cat > pipeline
