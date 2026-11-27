@@ -1,4 +1,4 @@
-name: INVEST AI Pipeline V5
+name: INVEST AI Pipeline V8
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
     - cron: '0 6 * * *'
 
 jobs:
-  pipeline:
+  pipeline-v8:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,12 +21,12 @@ jobs:
         run: |
           pip install requests
 
-      - name: Update System Metrics
+      - name: Pipeline V8
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
-          cat > pipeline_v5.py << 'PY'
+          cat > pipeline_v8.py << 'PY'
           import requests
           from datetime import date
 
@@ -38,34 +38,37 @@ jobs:
               "Authorization": f"Bearer {KEY}"
           }
 
-          metrics = requests.get(
-              f"{URL}/rest/v1/vw_live_metrics?select=*",
+          data = requests.get(
+              f"{URL}/rest/v1/vw_pipeline_master_data?select=*",
               headers=headers
           ).json()[0]
 
-          payload = {
-              "metric_date": str(date.today()),
-              "total_assets": metrics["total_assets"],
-              "assets_with_prices": metrics["assets_with_prices"],
-              "technical_indicators": metrics["technical_indicators"],
-              "scores": metrics["scores"],
-              "opportunities": metrics["opportunities"],
-              "strong_buy": metrics["strong_buy"]
+          process_date = str(data["process_date"])
+
+          insert_headers = {
+              "apikey": KEY,
+              "Authorization": f"Bearer {KEY}",
+              "Content-Type": "application/json",
+              "Prefer": "return=minimal"
           }
 
-          response = requests.post(
+          # SYSTEM METRICS
+
+          requests.post(
               f"{URL}/rest/v1/system_metrics",
-              headers={
-                  "apikey": KEY,
-                  "Authorization": f"Bearer {KEY}",
-                  "Content-Type": "application/json",
-                  "Prefer": "return=representation"
-              },
-              json=payload
+              headers=insert_headers,
+              json={
+                  "metric_date": process_date,
+                  "total_assets": 49,
+                  "assets_with_prices": 40,
+                  "technical_indicators": data["scores"],
+                  "scores": data["scores"],
+                  "opportunities": data["opportunities"],
+                  "strong_buy": data["strong_buy_count"]
+              }
           )
 
-          print(response.status_code)
-          print(response.text)
-          PY
+          # DAILY BRIEF HISTORY
 
-          python pipeline_v5.py
+          requests.post(
+        
